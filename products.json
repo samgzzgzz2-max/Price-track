@@ -1,0 +1,40 @@
+{
+  "brands": {
+    "pinol": {
+      "display_name": "Pinol",
+      "skus": [
+        {"name": "Pinol Original 500ml", "volume_ml": 500, "search_queries": ["pinol original 500ml", "pinol multiusos 500"]},
+        {"name": "Pinol Original 1L",    "volume_ml": 1000, "search_queries": ["pinol original 1 litro", "pinol 1l"]},
+        {"name": "Pinol Original 2L",    "volume_ml": 2000, "search_queries": ["pinol original 2 litros", "pinol 2l"]},
+        {"name": "Pinol Pino 750ml",     "volume_ml": 750,  "search_queries": ["pinol pino 750ml", "pinol bosque pino"]}
+      ]
+    },
+    "ensueno": {
+      "display_name": "Ensueño",
+      "skus": [
+        {"name": "Ensueño 500ml",            "volume_ml": 500,  "search_queries": ["ensueno suavizante 500ml", "ensueño 500"]},
+        {"name": "Ensueño 1L",               "volume_ml": 1000, "search_queries": ["ensueno suavizante 1 litro", "ensueño 1l"]},
+        {"name": "Ensueño 1.8L",             "volume_ml": 1800, "search_queries": ["ensueno suavizante 1.8 litros", "ensueño 1800"]},
+        {"name": "Ensueño Concentrado 500ml","volume_ml": 500,  "search_queries": ["ensueno concentrado 500ml"]}
+      ]
+    },
+    "cloralex": {
+      "display_name": "Cloralex",
+      "skus": [
+        {"name": "Cloralex 1L",       "volume_ml": 1000, "search_queries": ["cloralex 1 litro", "cloralex cloro 1l"]},
+        {"name": "Cloralex 2L",       "volume_ml": 2000, "search_queries": ["cloralex 2 litros", "cloralex 2l"]},
+        {"name": "Cloralex 3.78L",    "volume_ml": 3780, "search_queries": ["cloralex 3.78 litros", "cloralex galón"]},
+        {"name": "Cloralex Rosa 1L",  "volume_ml": 1000, "search_queries": ["cloralex rosa 1 litro", "cloralex floral"]}
+      ]
+    },
+    "citrex": {
+      "display_name": "Citrex",
+      "skus": [
+        {"name": "Citrex Limón 500ml",  "volume_ml": 500,  "search_queries": ["citrex lavatrastes limon 500ml", "citrex 500"]},
+        {"name": "Citrex Limón 1L",     "volume_ml": 1000, "search_queries": ["citrex lavatrastes limon 1 litro", "citrex 1l"]},
+        {"name": "Citrex Naranja 500ml","volume_ml": 500,  "search_queries": ["citrex lavatrastes naranja 500ml"]},
+        {"name": "Citrex Premium 750ml","volume_ml": 750,  "search_queries": ["citrex premium 750ml", "citrex ultra"]}
+      ]
+    }
+  }
+}

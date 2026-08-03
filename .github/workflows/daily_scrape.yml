@@ -16,7 +16,7 @@ on:
 jobs:
   scrape:
     name: Scrape & Update Dashboard
-    runs-on: ubuntu-latest
+        runs-on: ubuntu-22.04
     timeout-minutes: 60  # Máximo 1 hora — si tarda más, algo salió mal
 
     permissions:

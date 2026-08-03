@@ -1,0 +1,105 @@
+name: 📊 CPG Daily Price Scraper
+
+on:
+  # Corre todos los días a las 08:00 UTC = 02:00 AM hora México (CDT)
+  schedule:
+    - cron: '0 8 * * *'
+
+  # Permite correrlo manualmente desde GitHub → Actions → "Run workflow"
+  workflow_dispatch:
+    inputs:
+      notify:
+        description: 'Enviar notificación WhatsApp al terminar?'
+        required: false
+        default: 'true'
+
+jobs:
+  scrape:
+    name: Scrape & Update Dashboard
+    runs-on: ubuntu-latest
+    timeout-minutes: 60  # Máximo 1 hora — si tarda más, algo salió mal
+
+    permissions:
+      contents: write   # Para hacer push del HTML generado a GitHub Pages
+
+    steps:
+      # ── 1. Checkout del repositorio ────────────────────────────────────────
+      - name: ⬇️ Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Python ──────────────────────────────────────────────────────────
+      - name: 🐍 Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      # ── 3. Instalar dependencias ──────────────────────────────────────────
+      - name: 📦 Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
+          playwright install-deps chromium
+
+      # ── 4. Crear carpetas necesarias ──────────────────────────────────────
+      - name: 📁 Create directories
+        run: |
+          mkdir -p logs data docs
+
+      # ── 5. Correr el scraper ──────────────────────────────────────────────
+      - name: 🕷️ Run scraper
+        env:
+          # Supabase (base de datos)
+          SUPABASE_URL:  ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:  ${{ secrets.SUPABASE_KEY }}
+          # Twilio (WhatsApp)
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN:  ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM:        ${{ secrets.TWILIO_FROM }}
+          WHATSAPP_TO:        ${{ secrets.WHATSAPP_TO }}
+          # Mercado Libre API (opcional pero recomendado)
+          MELI_ACCESS_TOKEN:  ${{ secrets.MELI_ACCESS_TOKEN }}
+          # Metadatos del repo para construir URL del dashboard
+          GITHUB_REPOSITORY:  ${{ github.repository }}
+        run: |
+          python main.py
+        continue-on-error: true  # El job no falla si el scraper tuvo errores parciales
+        id: scraper
+
+      # ── 6. Publicar dashboard en GitHub Pages ─────────────────────────────
+      - name: 🌐 Deploy dashboard to GitHub Pages
+        if: always()  # Publicar incluso si el scraper tuvo errores parciales
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+          publish_branch: gh-pages
+          commit_message: "📊 Dashboard actualizado ${{ github.run_id }}"
+
+      # ── 7. Guardar logs como artifact (para diagnóstico) ──────────────────
+      - name: 📋 Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scraper-logs-${{ github.run_id }}
+          path: logs/
+          retention-days: 30
+
+      # ── 8. Notificar si el job FALLÓ completamente ────────────────────────
+      - name: 🚨 Notify on total failure
+        if: failure()
+        env:
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN:  ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM:        ${{ secrets.TWILIO_FROM }}
+          WHATSAPP_TO:        ${{ secrets.WHATSAPP_TO }}
+        run: |
+          python -c "
+          from core.notifier import Notifier
+          n = Notifier()
+          n.send_whatsapp(
+            '🚨 *FALLO CRÍTICO — CPG Scraper*\n'
+            'El scraper de hoy falló completamente (no es error parcial).\n'
+            'Revisa: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+          )
+          "

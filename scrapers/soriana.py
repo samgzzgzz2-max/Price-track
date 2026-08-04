@@ -1,7 +1,7 @@
 """
 Soriana MX — Dificultad: BAJA.
 Plataforma propia. HTML accesible con httpx.
-Búsqueda: https://www.soriana.com/search?q={query}&start=0&sz=12
+Busqueda: https://www.soriana.com/search?q={query}&start=0&sz=12
 """
 from __future__ import annotations
 import httpx
@@ -18,7 +18,7 @@ class SorianaScraper(BaseRetailerScraper):
 
     PRICE_SELECTORS = [
         "span.price-sales",
-        "span.value[content]",          # Microdato con atributo content
+        "span.value[content]",
         "[itemprop='price']",
         ".product-price .price",
         ".price-container .price",
@@ -31,9 +31,14 @@ class SorianaScraper(BaseRetailerScraper):
         super().__init__()
         self.client = httpx.AsyncClient(
             headers={
-                "User-Agent": self.random_ua(),
-                "Accept-Language": "es-MX,es;q=0.9",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
+                "Accept-Encoding": "gzip, deflate, br",
                 "Referer": BASE_URL,
+                "sec-fetch-dest": "document",
+                "sec-fetch-mode": "navigate",
+                "upgrade-insecure-requests": "1",
             },
             timeout=30,
             follow_redirects=True
@@ -49,30 +54,23 @@ class SorianaScraper(BaseRetailerScraper):
 
     def _extract_products(self, soup: BeautifulSoup) -> list[dict]:
         products = []
-        # Soriana: productos en divs con clase "product-tile" o similar
         items = (
             soup.find_all("div", class_=lambda c: c and "product-tile" in str(c)) or
             soup.find_all("div", class_=lambda c: c and "product-item" in str(c)) or
             soup.find_all("article", class_=lambda c: c and "product" in str(c).lower())
         )
-
         for item in items[:10]:
             name_el = (
                 item.find("div", class_=lambda c: c and "product-name" in str(c)) or
-                item.find("h3") or
-                item.find("h2") or
-                item.find(class_="name")
+                item.find("h3") or item.find("h2") or item.find(class_="name")
             )
             price_el = None
             for sel in self.PRICE_SELECTORS:
                 price_el = item.select_one(sel)
                 if price_el:
                     break
-
             link_el = item.find("a", href=True)
-
             if name_el and price_el:
-                # Extraer precio: algunos tienen atributo "content" con el valor limpio
                 price_text = price_el.get("content") or price_el.get_text(strip=True)
                 products.append({
                     "name": name_el.get_text(strip=True),
@@ -80,7 +78,6 @@ class SorianaScraper(BaseRetailerScraper):
                     "url": BASE_URL + link_el["href"] if link_el and link_el["href"].startswith("/") else (link_el["href"] if link_el else ""),
                     "html": str(item)
                 })
-
         return products
 
     def _best_match(self, products: list[dict], sku_name: str) -> dict | None:
@@ -108,22 +105,21 @@ class SorianaScraper(BaseRetailerScraper):
             await self.random_delay(2.0, 5.0)
 
         if not best_product:
-            return PriceRecord(retailer=self.RETAILER_ID, brand=brand, sku_name=sku_name,
-                               volume_ml=volume_ml, price_mxn=None, in_stock=False,
-                               url=f"{BASE_URL}/search?q={search_queries[0].replace(' ','+')}"),
-            # Fix: devolver PriceRecord, no tupla
-            return PriceRecord(retailer=self.RETAILER_ID, brand=brand, sku_name=sku_name,
-                               volume_ml=volume_ml, price_mxn=None, in_stock=False,
-                               url=f"{BASE_URL}/search?q={search_queries[0].replace(' ','+')}")
+            return PriceRecord(
+                retailer=self.RETAILER_ID, brand=brand, sku_name=sku_name,
+                volume_ml=volume_ml, price_mxn=None, in_stock=False,
+                url=f"{BASE_URL}/search?q={search_queries[0].replace(' ', '+')}"
+            )
 
         text_lower = BeautifulSoup(best_product["html"], "lxml").get_text().lower()
         in_stock = not any(s in text_lower for s in self.OUT_OF_STOCK_SIGNALS)
         price = self.parse_price(best_product["price_text"])
-
-        logger.info(f"[soriana] {sku_name}: ${price} {'✓' if in_stock else '✗'}")
-        return PriceRecord(retailer=self.RETAILER_ID, brand=brand, sku_name=sku_name,
-                           volume_ml=volume_ml, price_mxn=price, in_stock=in_stock,
-                           url=best_product.get("url", ""))
+        logger.info(f"[soriana] {sku_name}: precio encontrado")
+        return PriceRecord(
+            retailer=self.RETAILER_ID, brand=brand, sku_name=sku_name,
+            volume_ml=volume_ml, price_mxn=price, in_stock=in_stock,
+            url=best_product.get("url", "")
+        )
 
     async def close(self):
         await self.client.aclose()

@@ -1,7 +1,7 @@
 """
-Mercado Libre — usa la API oficial (GRATIS, 25k calls/día).
+Mercado Libre MX — usa la API oficial (GRATIS, 25k calls/dia).
 No necesita Playwright ni proxies.
-Documentación: https://developers.mercadolibre.com.mx/
+Documentacion: https://developers.mercadolibre.com.mx/
 """
 from __future__ import annotations
 import httpx
@@ -9,7 +9,7 @@ from loguru import logger
 from tenacity import retry, stop_after_attempt, wait_exponential
 from .base import BaseRetailerScraper, PriceRecord
 
-MELI_SITE = "MLM"  # México
+MELI_SITE = "MLM"  # Mexico
 MELI_API = "https://api.mercadolibre.com"
 
 
@@ -18,15 +18,21 @@ class MercadoLibreScraper(BaseRetailerScraper):
 
     def __init__(self, access_token: str | None = None):
         super().__init__()
-        self.access_token = access_token
+        # Solo usar el token si es un valor real (no "none", "null", vacio)
+        valid_token = (
+            access_token
+            and access_token.strip().lower() not in ("none", "null", "", "false")
+            and len(access_token.strip()) > 10
+        )
+        self.access_token = access_token if valid_token else None
         headers = {"User-Agent": self.random_ua()}
-        if access_token:
-            headers["Authorization"] = f"Bearer {access_token}"
+        if self.access_token:
+            headers["Authorization"] = f"Bearer {self.access_token}"
         self.client = httpx.AsyncClient(headers=headers, timeout=30)
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=10))
     async def _search(self, query: str) -> list[dict]:
-        """Llama al endpoint de búsqueda de MeLi."""
+        """Llama al endpoint de busqueda de MeLi."""
         url = f"{MELI_API}/sites/{MELI_SITE}/search"
         resp = await self.client.get(url, params={
             "q": query,
@@ -37,18 +43,13 @@ class MercadoLibreScraper(BaseRetailerScraper):
         return resp.json().get("results", [])
 
     def _best_match(self, results: list[dict], sku_name: str, volume_ml: int) -> dict | None:
-        """
-        Devuelve el resultado más relevante.
-        Filtra por: nombre contiene palabras clave del SKU, precio razonable.
-        """
+        """Devuelve el resultado mas relevante."""
         sku_lower = sku_name.lower()
-        volume_str = str(volume_ml)
         candidates = []
 
         for item in results:
             title = item.get("title", "").lower()
             price = item.get("price", 0)
-            # Debe mencionar al menos 2 palabras del SKU
             words = [w for w in sku_lower.split() if len(w) > 2]
             matches = sum(1 for w in words if w in title)
             if matches >= 2 and 5 <= price <= 800:
@@ -56,7 +57,6 @@ class MercadoLibreScraper(BaseRetailerScraper):
 
         if not candidates:
             return None
-        # El de más coincidencias
         candidates.sort(key=lambda x: x[0], reverse=True)
         return candidates[0][1]
 
@@ -86,7 +86,7 @@ class MercadoLibreScraper(BaseRetailerScraper):
         in_stock = best_item.get("available_quantity", 0) > 0
         permalink = best_item.get("permalink", "")
 
-        logger.info(f"[meli] {sku_name}: ${price} {'✓' if in_stock else '✗ sin stock'}")
+        logger.info(f"[meli] {sku_name}: ${price} encontrado")
         return PriceRecord(
             retailer=self.RETAILER_ID, brand=brand, sku_name=sku_name,
             volume_ml=volume_ml, price_mxn=float(price) if price else None,

@@ -1,4 +1,4 @@
-"""
+""" 
 Chedraui MX — Plataforma VTEX.
 Usa el API de busqueda interno de VTEX (JSON, sin JS requerido).
 URL API: https://www.chedraui.com.mx/api/catalog_system/pub/products/search?ft={query}

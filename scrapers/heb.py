@@ -4,7 +4,8 @@ Usa Playwright porque parte del contenido se carga con JavaScript.
 URL de búsqueda: https://www.heb.com.mx/search?q={query}
 """
 from __future__ import annotations
-import asyncio
+
+import re
 from loguru import logger
 from tenacity import retry, stop_after_attempt, wait_exponential
 from playwright.async_api import async_playwright, Page, TimeoutError as PWTimeout
@@ -36,14 +37,33 @@ class HEBScraper(BaseRetailerScraper):
                     "--no-sandbox",
                     "--disable-blink-features=AutomationControlled",
                     "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--window-size=1920,1080",
                 ]
             )
             context = await browser.new_context(
                 user_agent=self.random_ua(),
-                viewport={"width": 1366, "height": 768},
+                viewport={"width": 1920, "height": 1080},
                 locale="es-MX",
                 timezone_id="America/Monterrey",
+                extra_http_headers={
+                    "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
+                    "sec-ch-ua-platform": '"Windows"',
+                    "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+                    "sec-ch-ua-mobile": "?0",
+                }
             )
+
+            # Ocultar que es automatizado (HEB usa Akamai Bot Manager)
+            await context.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]});
+                Object.defineProperty(navigator, 'languages', {get: () => ['es-MX', 'es', 'en']});
+                Object.defineProperty(navigator, 'platform', {get: () => 'Win32'});
+                Object.defineProperty(navigator, 'hardwareConcurrency', {get: () => 8});
+                window.chrome = { runtime: {} };
+            """)
+
             page = await context.new_page()
             # Bloquear recursos innecesarios para acelerar
             await page.route("**/*.{png,jpg,jpeg,gif,svg,webp,woff,woff2}", lambda r: r.abort())
@@ -61,22 +81,32 @@ class HEBScraper(BaseRetailerScraper):
             await browser.close()
 
         if not result:
-            return PriceRecord(retailer=self.RETAILER_ID, brand=brand, sku_name=sku_name,
-                               volume_ml=volume_ml, price_mxn=None, in_stock=False,
-                               url=f"{BASE_URL}/search?q={search_queries[0].replace(' ','%20')}")
+            return PriceRecord(
+                retailer=self.RETAILER_ID, brand=brand, sku_name=sku_name,
+                volume_ml=volume_ml, price_mxn=None, in_stock=False,
+                url=f"{BASE_URL}/search?q={search_queries[0].replace(' ', '%20')}"
+            )
         price, in_stock, url = result
         logger.info(f"[heb] {sku_name}: ${price} {'✓' if in_stock else '✗'}")
-        return PriceRecord(retailer=self.RETAILER_ID, brand=brand, sku_name=sku_name,
-                           volume_ml=volume_ml, price_mxn=price, in_stock=in_stock, url=url)
+        return PriceRecord(
+            retailer=self.RETAILER_ID, brand=brand, sku_name=sku_name,
+            volume_ml=volume_ml, price_mxn=price, in_stock=in_stock, url=url
+        )
 
     async def _search_page(self, page: Page, query: str, sku_name: str,
                            volume_ml: int) -> tuple | None:
         url = f"{BASE_URL}/search?q={query.replace(' ', '%20')}"
         try:
             await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-            await page.wait_for_timeout(2000)  # Esperar renderizado JS
+            await page.wait_for_timeout(2500)  # Esperar renderizado JS
         except PWTimeout:
             logger.warning(f"[heb] Timeout cargando {url}")
+            return None
+
+        # Verificar bloqueo
+        page_text = (await page.inner_text("body")).lower()
+        if any(kw in page_text for kw in ["captcha", "robot", "acceso denegado"]):
+            logger.warning("[heb] Posible bloqueo detectado.")
             return None
 
         # Buscar productos en la página
@@ -92,11 +122,14 @@ class HEBScraper(BaseRetailerScraper):
         best_score = 0
 
         for card in product_cards[:8]:
-            card_text = (await card.inner_text()).lower()
-            score = sum(1 for w in sku_words if w in card_text)
-            if score > best_score:
-                best_score = score
-                best_card = card
+            try:
+                card_text = (await card.inner_text()).lower()
+                score = sum(1 for w in sku_words if w in card_text)
+                if score > best_score:
+                    best_score = score
+                    best_card = card
+            except Exception:
+                continue
 
         if not best_card or best_score < 2:
             return None
@@ -110,8 +143,6 @@ class HEBScraper(BaseRetailerScraper):
                 break
 
         if not price_text:
-            # Último recurso: buscar patrón de precio en el texto completo
-            import re
             card_text_raw = await best_card.inner_text()
             m = re.search(r'\$\s*(\d{1,3}(?:\.\d{2})?)', card_text_raw)
             price_text = m.group(0) if m else None
@@ -120,7 +151,9 @@ class HEBScraper(BaseRetailerScraper):
 
         # Detectar sin stock
         card_text_full = (await best_card.inner_text()).lower()
-        in_stock = not any(s in card_text_full for s in ["sin stock", "agotado", "no disponible"])
+        in_stock = not any(s in card_text_full for s in [
+            "sin stock", "agotado", "no disponible", "out of stock"
+        ])
 
         # URL del producto
         link_el = await best_card.query_selector("a[href]")
@@ -129,4 +162,4 @@ class HEBScraper(BaseRetailerScraper):
         return price, in_stock, prod_url
 
     async def close(self):
-        pass  # Playwright se cierra en el context manager
+        pass

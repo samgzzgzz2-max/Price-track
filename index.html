@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CPG Price Intelligence — AlEn México</title>
+<style>
+  :root {
+    --bg: #0f1117; --card: #1a1d2e; --card2: #222537;
+    --border: #2d3050; --text: #e2e8f0; --muted: #8892a4;
+    --green: #22c55e; --red: #ef4444; --yellow: #f59e0b;
+    --blue: #3b82f6; --purple: #8b5cf6;
+    --pinol: #e07b39; --ensueno: #8a4fcf; --cloralex: #2d9cdb; --citrex: #27ae60;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* Header */
+  .header { background: var(--card); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 18px; font-weight: 700; }
+  .header .subtitle { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .updated { color: var(--muted); font-size: 11px; text-align: right; }
+
+  /* KPI Row */
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; padding: 20px 24px 0; }
+  .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .kpi .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .kpi .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+  .kpi .desc { color: var(--muted); font-size: 11px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kpi.red .value { color: var(--red); }
+  .kpi.green .value { color: var(--green); }
+  .kpi.yellow .value { color: var(--yellow); }
+  .kpi.blue .value { color: var(--blue); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; padding: 20px 24px 0; border-bottom: 1px solid var(--border); margin: 0 0 0; }
+  .tab { padding: 8px 16px; border-radius: 6px 6px 0 0; cursor: pointer; font-weight: 500; color: var(--muted); border: 1px solid transparent; border-bottom: none; position: relative; bottom: -1px; }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--card); border-color: var(--border); color: var(--text); }
+
+  /* Sections */
+  .section { padding: 20px 24px; display: none; }
+  .section.active { display: block; }
+  .section-title { font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+
+  /* Price Matrix Table */
+  .matrix-table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+  .matrix-table th { background: var(--card2); padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); border-bottom: 1px solid var(--border); }
+  .matrix-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .matrix-table tr:last-child td { border-bottom: none; }
+  .matrix-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .brand-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .brand-pinol { background: rgba(224,123,57,0.2); color: var(--pinol); }
+  .brand-ensueno { background: rgba(138,79,207,0.2); color: var(--ensueno); }
+  .brand-cloralex { background: rgba(45,156,219,0.2); color: var(--cloralex); }
+  .brand-citrex { background: rgba(39,174,96,0.2); color: var(--citrex); }
+  .price-cell { font-weight: 600; font-size: 15px; }
+  .price-min { color: var(--green); }
+  .price-max { color: var(--red); }
+  .oos { color: var(--muted); font-size: 12px; }
+  .ppl { color: var(--muted); font-size: 11px; margin-top: 1px; }
+
+  /* Gap badge */
+  .gap-badge { padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .gap-high { background: rgba(239,68,68,0.15); color: var(--red); }
+  .gap-med  { background: rgba(245,158,11,0.15); color: var(--yellow); }
+  .gap-low  { background: rgba(34,197,94,0.15); color: var(--green); }
+
+  /* Alerts */
+  .alerts-list { display: flex; flex-direction: column; gap: 8px; }
+  .alert-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; display: flex; align-items: flex-start; gap: 12px; }
+  .alert-card.alta { border-left: 3px solid var(--red); }
+  .alert-card.media { border-left: 3px solid var(--yellow); }
+  .alert-card.baja { border-left: 3px solid var(--blue); }
+  .alert-icon { font-size: 18px; flex-shrink: 0; }
+  .alert-body .title { font-weight: 600; margin-bottom: 2px; }
+  .alert-body .detail { color: var(--muted); font-size: 12px; }
+  .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; margin-left: 6px; }
+  .badge-alta { background: rgba(239,68,68,0.15); color: var(--red); }
+  .badge-media { background: rgba(245,158,11,0.15); color: var(--yellow); }
+  .badge-baja { background: rgba(59,130,246,0.15); color: var(--blue); }
+
+  /* Errors */
+  .error-banner { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; color: var(--red); font-size: 13px; }
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty .icon { font-size: 48px; margin-bottom: 12px; }
+
+  /* Chart placeholder */
+  .chart-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; height: 240px; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+  canvas { max-width: 100%; }
+
+  /* Retailer grid */
+  .retailer-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-bottom: 16px; }
+  .retailer-chip { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; text-align: center; font-size: 12px; }
+  .retailer-chip.ok { border-color: rgba(34,197,94,0.4); }
+  .retailer-chip.fail { border-color: rgba(239,68,68,0.4); color: var(--muted); }
+  .retailer-chip .r-name { font-weight: 600; }
+  .retailer-chip .r-status { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  @media (max-width: 640px) {
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .tabs { overflow-x: auto; white-space: nowrap; }
+    .matrix-table { font-size: 12px; }
+    .matrix-table th, .matrix-table td { padding: 8px 8px; }
+  }
+</style>
+</head>
+<body>
+<script>
+const DATA = {"generated_at": "2026-08-04T00:46:59.432688Z", "price_matrix": {"pinol": {"Pinol Original 500ml": {"volume_ml": 500, "meli": {"price": null, "in_stock": false, "ppl": null, "url": "https://listado.mercadolibre.com.mx/pinol-original-500ml"}, "chedraui": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.chedraui.com.mx/pinol%20original%20500ml?map=ft"}, "walmart": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.walmart.com.mx/search?q=pinol%20original%20500ml"}, "heb": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.heb.com.mx/search?q=pinol%20original%20500ml"}}, "Pinol Original 1L": {"volume_ml": 1000, "meli": {"price": null, "in_stock": false, "ppl": null, "url": "https://listado.mercadolibre.com.mx/pinol-original-1-litro"}, "chedraui": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.chedraui.com.mx/pinol%20original%201%20litro?map=ft"}, "walmart": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.walmart.com.mx/search?q=pinol%20original%201%20litro"}, "heb": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.heb.com.mx/search?q=pinol%20original%201%20litro"}}, "Pinol Original 2L": {"volume_ml": 2000, "meli": {"price": null, "in_stock": false, "ppl": null, "url": "https://listado.mercadolibre.com.mx/pinol-original-2-litros"}, "chedraui": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.chedraui.com.mx/pinol%20original%202%20litros?map=ft"}, "walmart": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.walmart.com.mx/search?q=pinol%20original%202%20litros"}, "heb": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.heb.com.mx/search?q=pinol%20original%202%20litros"}}, "Pinol Pino 750ml": {"volume_ml": 750, "meli": {"price": null, "in_stock": false, "ppl": null, "url": "https://listado.mercadolibre.com.mx/pinol-pino-750ml"}, "chedraui": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.chedraui.com.mx/pinol%20pino%20750ml?map=ft"}, "walmart": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.walmart.com.mx/search?q=pinol%20pino%20750ml"}, "heb": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.heb.com.mx/search?q=pinol%20pino%20750ml"}}}, "ensueno": {"Ensueño 500ml": {"volume_ml": 500, "meli": {"price": null, "in_stock": false, "ppl": null, "url": "https://listado.mercadolibre.com.mx/ensueno-suavizante-500ml"}, "chedraui": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.chedraui.com.mx/ensueno%20suavizante%20500ml?map=ft"}, "walmart": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.walmart.com.mx/search?q=ensueno%20suavizante%20500ml"}, "heb": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.heb.com.mx/search?q=ensueno%20suavizante%20500ml"}}, "Ensueño 1L": {"volume_ml": 1000, "meli": {"price": null, "in_stock": false, "ppl": null, "url": "https://listado.mercadolibre.com.mx/ensueno-suavizante-1-litro"}, "chedraui": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.chedraui.com.mx/ensueno%20suavizante%201%20litro?map=ft"}, "walmart": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.walmart.com.mx/search?q=ensueno%20suavizante%201%20litro"}, "heb": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.heb.com.mx/search?q=ensueno%20suavizante%201%20litro"}}, "Ensueño 1.8L": {"volume_ml": 1800, "meli": {"price": null, "in_stock": false, "ppl": null, "url": "https://listado.mercadolibre.com.mx/ensueno-suavizante-1.8-litros"}, "chedraui": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.chedraui.com.mx/ensueno%20suavizante%201.8%20litros?map=ft"}, "walmart": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.walmart.com.mx/search?q=ensueno%20suavizante%201.8%20litros"}, "heb": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.heb.com.mx/search?q=ensueno%20suavizante%201.8%20litros"}}, "Ensueño Concentrado 500ml": {"volume_ml": 500, "meli": {"price": null, "in_stock": false, "ppl": null, "url": "https://listado.mercadolibre.com.mx/ensueno-concentrado-500ml"}, "chedraui": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.chedraui.com.mx/ensueno%20concentrado%20500ml?map=ft"}, "walmart": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.walmart.com.mx/search?q=ensueno%20concentrado%20500ml"}, "heb": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.heb.com.mx/search?q=ensueno%20concentrado%20500ml"}}}, "cloralex": {"Cloralex 1L": {"volume_ml": 1000, "meli": {"price": null, "in_stock": false, "ppl": null, "url": "https://listado.mercadolibre.com.mx/cloralex-1-litro"}, "chedraui": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.chedraui.com.mx/cloralex%201%20litro?map=ft"}, "walmart": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.walmart.com.mx/search?q=cloralex%201%20litro"}, "heb": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.heb.com.mx/search?q=cloralex%201%20litro"}}, "Cloralex 2L": {"volume_ml": 2000, "meli": {"price": null, "in_stock": false, "ppl": null, "url": "https://listado.mercadolibre.com.mx/cloralex-2-litros"}, "chedraui": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.chedraui.com.mx/cloralex%202%20litros?map=ft"}, "walmart": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.walmart.com.mx/search?q=cloralex%202%20litros"}, "heb": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.heb.com.mx/search?q=cloralex%202%20litros"}}, "Cloralex 3.78L": {"volume_ml": 3780, "meli": {"price": null, "in_stock": false, "ppl": null, "url": "https://listado.mercadolibre.com.mx/cloralex-3.78-litros"}, "chedraui": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.chedraui.com.mx/cloralex%203.78%20litros?map=ft"}, "walmart": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.walmart.com.mx/search?q=cloralex%203.78%20litros"}, "heb": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.heb.com.mx/search?q=cloralex%203.78%20litros"}}, "Cloralex Rosa 1L": {"volume_ml": 1000, "meli": {"price": null, "in_stock": false, "ppl": null, "url": "https://listado.mercadolibre.com.mx/cloralex-rosa-1-litro"}, "chedraui": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.chedraui.com.mx/cloralex%20rosa%201%20litro?map=ft"}, "walmart": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.walmart.com.mx/search?q=cloralex%20rosa%201%20litro"}, "heb": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.heb.com.mx/search?q=cloralex%20rosa%201%20litro"}}}, "citrex": {"Citrex Limón 500ml": {"volume_ml": 500, "meli": {"price": null, "in_stock": false, "ppl": null, "url": "https://listado.mercadolibre.com.mx/citrex-lavatrastes-limon-500ml"}, "chedraui": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.chedraui.com.mx/citrex%20lavatrastes%20limon%20500ml?map=ft"}, "walmart": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.walmart.com.mx/search?q=citrex%20lavatrastes%20limon%20500ml"}, "heb": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.heb.com.mx/search?q=citrex%20lavatrastes%20limon%20500ml"}}, "Citrex Limón 1L": {"volume_ml": 1000, "meli": {"price": null, "in_stock": false, "ppl": null, "url": "https://listado.mercadolibre.com.mx/citrex-lavatrastes-limon-1-litro"}, "chedraui": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.chedraui.com.mx/citrex%20lavatrastes%20limon%201%20litro?map=ft"}, "walmart": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.walmart.com.mx/search?q=citrex%20lavatrastes%20limon%201%20litro"}, "heb": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.heb.com.mx/search?q=citrex%20lavatrastes%20limon%201%20litro"}}, "Citrex Naranja 500ml": {"volume_ml": 500, "meli": {"price": null, "in_stock": false, "ppl": null, "url": "https://listado.mercadolibre.com.mx/citrex-lavatrastes-naranja-500ml"}, "chedraui": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.chedraui.com.mx/citrex%20lavatrastes%20naranja%20500ml?map=ft"}, "walmart": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.walmart.com.mx/search?q=citrex%20lavatrastes%20naranja%20500ml"}, "heb": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.heb.com.mx/search?q=citrex%20lavatrastes%20naranja%20500ml"}}, "Citrex Premium 750ml": {"volume_ml": 750, "meli": {"price": null, "in_stock": false, "ppl": null, "url": "https://listado.mercadolibre.com.mx/citrex-premium-750ml"}, "chedraui": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.chedraui.com.mx/citrex%20premium%20750ml?map=ft"}, "walmart": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.walmart.com.mx/search?q=citrex%20premium%20750ml"}, "heb": {"price": null, "in_stock": false, "ppl": null, "url": "https://www.heb.com.mx/search?q=citrex%20premium%20750ml"}}}}, "kpis": {"active_alerts": 0, "oos_count": 64, "price_changes": 0, "max_gap": 0, "max_gap_desc": "", "best_ppl": null, "best_ppl_desc": "", "skus_monitored": 16}, "alerts": [], "history": [], "failed_retailers": [], "retailers": ["walmart", "heb", "chedraui", "soriana", "meli"], "retailer_labels": {"walmart": "Walmart", "heb": "HEB", "chedraui": "Chedraui", "soriana": "Soriana", "meli": "M.Libre"}, "brand_colors": {"pinol": "#e07b39", "ensueno": "#8a4fcf", "cloralex": "#2d9cdb", "citrex": "#27ae60"}};
+</script>
+
+<div class="header">
+  <div>
+    <h1>📊 CPG Price Intelligence</h1>
+    <div class="subtitle">Pinol · Ensueño · Cloralex · Citrex — México</div>
+  </div>
+  <div class="updated" id="updated-at"></div>
+</div>
+
+<div class="kpi-row" id="kpi-row"></div>
+
+<div class="tabs" id="tabs">
+  <div class="tab active" data-tab="matrix">Precios</div>
+  <div class="tab" data-tab="alerts">Alertas</div>
+  <div class="tab" data-tab="status">Estado</div>
+</div>
+
+<div class="section active" id="tab-matrix">
+  <div id="failed-banner"></div>
+  <div id="matrix-content"></div>
+</div>
+
+<div class="section" id="tab-alerts">
+  <div id="alerts-content"></div>
+</div>
+
+<div class="section" id="tab-status">
+  <div id="status-content"></div>
+</div>
+
+<script>
+(function() {
+  if (typeof DATA === 'undefined') {
+    document.body.innerHTML = '<div class="empty"><div class="icon">⏳</div><p>Datos no disponibles todavía. El primer scraping se ejecutará en el próximo ciclo.</p></div>';
+    return;
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  const fmt = (n) => n != null ? '$' + Number(n).toFixed(0) : '—';
+  const fmtPPL = (n) => n != null ? '$' + Number(n).toFixed(2) + '/L' : '';
+  const pct = (n) => n != null ? (n > 0 ? '+' : '') + Number(n).toFixed(1) + '%' : '';
+
+  const ALERT_ICONS = {
+    price_up: '🔺', price_down: '🔻', out_of_stock: '📦',
+    back_in_stock: '✅', high_gap: '↔️'
+  };
+
+  // ── Updated at ──────────────────────────────────────────────────────────
+  const ts = new Date(DATA.generated_at);
+  document.getElementById('updated-at').innerHTML =
+    `Actualizado<br><strong>${ts.toLocaleString('es-MX', {dateStyle:'medium', timeStyle:'short'})}</strong>`;
+
+  // ── KPIs ─────────────────────────────────────────────────────────────────
+  const k = DATA.kpis;
+  const kpis = [
+    { label: 'SKUs Monitoreados', value: k.skus_monitored || 0, cls: 'blue', desc: '5 cadenas' },
+    { label: 'Alertas Activas', value: k.active_alerts || 0, cls: k.active_alerts > 0 ? 'yellow' : 'green', desc: 'hoy' },
+    { label: 'Sin Stock', value: k.oos_count || 0, cls: k.oos_count > 0 ? 'red' : 'green', desc: 'SKUs agotados' },
+    { label: 'Gap Máximo', value: (k.max_gap || 0) + '%', cls: k.max_gap > 20 ? 'red' : k.max_gap > 10 ? 'yellow' : 'green', desc: k.max_gap_desc || 'entre cadenas' },
+  ];
+  if (k.best_ppl) {
+    kpis.push({ label: 'Mejor $/Litro', value: '$' + Number(k.best_ppl).toFixed(2), cls: 'green', desc: k.best_ppl_desc });
+  }
+  document.getElementById('kpi-row').innerHTML = kpis.map(kpi =>
+    `<div class="kpi ${kpi.cls}">
+      <div class="label">${kpi.label}</div>
+      <div class="value">${kpi.value}</div>
+      <div class="desc">${kpi.desc}</div>
+    </div>`
+  ).join('');
+
+  // ── Tabs ──────────────────────────────────────────────────────────────────
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.section').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+    });
+  });
+
+  // ── Failed banner ────────────────────────────────────────────────────────
+  if (DATA.failed_retailers && DATA.failed_retailers.length > 0) {
+    document.getElementById('failed-banner').innerHTML =
+      `<div class="error-banner">⚠️ Cadenas con error hoy: <strong>${DATA.failed_retailers.join(', ')}</strong> — datos pueden estar desactualizados.</div>`;
+  }
+
+  // ── Price Matrix ─────────────────────────────────────────────────────────
+  const RL = DATA.retailer_labels || {};
+  const retailers = DATA.retailers || ['walmart','heb','chedraui','soriana','meli'];
+  const matrix = DATA.price_matrix || {};
+
+  let matrixHTML = '';
+  for (const [brand, skus] of Object.entries(matrix)) {
+    matrixHTML += `<div class="section-title" style="margin-top:${matrixHTML?'20px':'0'}">${brand.charAt(0).toUpperCase()+brand.slice(1)}</div>`;
+    matrixHTML += `<table class="matrix-table"><thead><tr>
+      <th>Producto</th>
+      ${retailers.map(r => `<th>${RL[r] || r}</th>`).join('')}
+      <th>Gap</th>
+    </tr></thead><tbody>`;
+
+    for (const [skuName, skuData] of Object.entries(skus)) {
+      const prices = retailers.map(r => skuData[r]?.price).filter(p => p != null && p > 0);
+      const minP = prices.length ? Math.min(...prices) : null;
+      const maxP = prices.length ? Math.max(...prices) : null;
+      const gap = (minP && maxP && prices.length >= 2) ? Math.round((maxP - minP) / minP * 100) : null;
+      const gapCls = gap == null ? '' : gap > 20 ? 'gap-high' : gap > 10 ? 'gap-med' : 'gap-low';
+
+      matrixHTML += `<tr>
+        <td>
+          <span class="brand-tag brand-${brand}">${brand.charAt(0).toUpperCase()+brand.slice(1)}</span>
+          <br><span style="font-size:13px;margin-top:4px;display:inline-block">${skuName}</span>
+          <div style="color:var(--muted);font-size:11px">${skuData.volume_ml || ''}ml</div>
+        </td>`;
+
+      for (const retailer of retailers) {
+        const cell = skuData[retailer];
+        if (!cell) {
+          matrixHTML += `<td class="oos">—</td>`;
+        } else if (!cell.in_stock) {
+          matrixHTML += `<td><span class="oos">Sin stock</span></td>`;
+        } else {
+          const priceClass = cell.price === minP && prices.length > 1 ? 'price-min' : cell.price === maxP && prices.length > 1 ? 'price-max' : '';
+          const link = cell.url ? `<a href="${cell.url}" target="_blank">` : '';
+          const linkEnd = cell.url ? `</a>` : '';
+          matrixHTML += `<td>
+            ${link}<span class="price-cell ${priceClass}">${fmt(cell.price)}</span>${linkEnd}
+            <div class="ppl">${fmtPPL(cell.ppl)}</div>
+          </td>`;
+        }
+      }
+
+      matrixHTML += `<td>${gap != null ? `<span class="gap-badge ${gapCls}">${gap}%</span>` : '—'}</td></tr>`;
+    }
+    matrixHTML += '</tbody></table>';
+  }
+
+  if (!matrixHTML) {
+    matrixHTML = `<div class="empty"><div class="icon">📽</div><p>Sin datos de precios aún. El scraper recolectará precios en el próximo ciclo.</p></div>`;
+  }
+  document.getElementById('matrix-content').innerHTML = matrixHTML;
+
+  // ── Alerts ───────────────────────────────────────────────────────────────
+  const alerts = DATA.alerts || [];
+  let alertsHTML = '';
+  if (alerts.length === 0) {
+    alertsHTML = `<div class="empty"><div class="icon">✅</div><p>Sin alertas activas hoy.</p></div>`;
+  } else {
+    // Group by priority
+    for (const priority of ['alta','media','baja']) {
+      const group = alerts.filter(a => a.priority === priority);
+      if (!group.length) continue;
+      alertsHTML += `<div class="section-title">${priority.charAt(0).toUpperCase()+priority.slice(1)} Prioridad</div>
+        <div class="alerts-list" style="margin-bottom:16px">`;
+      for (const a of group) {
+        const icon = ALERT_ICONS[a.type] || '🔔';
+        const changeTxt = a.pct_change ? `<span style="color:${a.pct_change>0?'var(--red)':'var(--green)'}">${pct(a.pct_change)}</span>` : '';
+        alertsHTML += `<div class="alert-card ${a.priority}">
+          <div class="alert-icon">${icon}</div>
+          <div class="alert-body">
+            <div class="title">${a.sku_name} · ${RL[a.retailer]||a.retailer} ${changeTxt}<span class="badge badge-${a.priority}">${a.priority}</span></div>
+            <div class="detail">${a.message}</div>
+          </div>
+        </div>`;
+      }
+      alertsHTML += '</div>';
+    }
+  }
+  document.getElementById('alerts-content').innerHTML = alertsHTML;
+
+  // ── Status ───────────────────────────────────────────────────────────────
+  const failed = new Set(DATA.failed_retailers || []);
+  let statusHTML = `<div class="section-title">Estado de Cadenas</div>
+    <div class="retailer-grid">`;
+  for (const r of retailers) {
+    const ok = !failed.has(r);
+    statusHTML += `<div class="retailer-chip ${ok?'ok':'fail'}">
+      <div class="r-name">${RL[r]||r}</div>
+      <div class="r-status">${ok ? '✅ OK' : '❌ Error'}</div>
+    </div>`;
+  }
+  statusHTML += `</div>`;
+
+  const totalRecords = Object.values(matrix).reduce((sum, brand) =>
+    sum + Object.values(brand).reduce((s2, sku) =>
+      s2 + retailers.filter(r => sku[r]?.price != null).length, 0), 0);
+
+  statusHTML += `<div class="kpi blue" style="max-width:300px">
+    <div class="label">Registros en esta corrida</div>
+    <div class="value">${totalRecords}</div>
+    <div class="desc">${ts.toLocaleString('es-MX', {dateStyle:'short', timeStyle:'short'})}</div>
+  </div>`;
+
+  document.getElementById('status-content').innerHTML = statusHTML;
+
+})();
+</script>
+</body>
+</html>

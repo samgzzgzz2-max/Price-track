@@ -83,13 +83,32 @@ async def scrape_retailer(scraper_id: str, scraper, catalog: dict) -> tuple[list
 
 
 # ── Main ───────────────────────────────────────────────────────────────────
+class _NullDatabase:
+    """Fallback DB que sólo guarda backup local cuando Supabase no está disponible."""
+    def save_all(self, records): return 0
+    def get_yesterday_prices(self): return {}
+    def get_price_history(self, days=30): return []
+    def save_price_change(self, **kw): pass
+
+
 async def main():
     start_time = datetime.now()
     logger.info(f"🚀 CPG Scraper iniciando — {start_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
 
-    # Inicializar servicios
-    db = Database()
-    notifier = Notifier()
+    # Inicializar servicios (con manejo de errores para credenciales inválidas)
+    try:
+        db = Database()
+        logger.info("[db] Supabase conectado")
+    except Exception as e:
+        logger.warning(f"[db] No se pudo conectar a Supabase: {e} — usando modo local")
+        db = _NullDatabase()
+
+    try:
+        notifier = Notifier()
+    except Exception as e:
+        logger.warning(f"[notifier] Error inicializando: {e}")
+        notifier = None
+
     scrapers = get_scrapers()
 
     # Scrapers que corren en paralelo (los sin Playwright)
@@ -112,13 +131,15 @@ async def main():
         if isinstance(result, Exception):
             logger.error(f"[{sid}] Excepción no capturada: {result}")
             failed_retailers.append(sid)
-            notifier.notify_scrape_failure(sid, str(result))
+            if notifier:
+                notifier.notify_scrape_failure(sid, str(result))
         else:
             records, error = result
             all_records.extend(records)
             if error:
                 failed_retailers.append(sid)
-                notifier.notify_scrape_failure(sid, error)
+                if notifier:
+                    notifier.notify_scrape_failure(sid, error)
 
     # ── Secuencial (Playwright) ─────────────────────────────────────────────
     for sid in SEQUENTIAL_SCRAPERS:
@@ -128,7 +149,8 @@ async def main():
         all_records.extend(records)
         if error:
             failed_retailers.append(sid)
-            notifier.notify_scrape_failure(sid, error)
+            if notifier:
+                notifier.notify_scrape_failure(sid, error)
         await asyncio.sleep(5)  # Pausa entre browsers
 
     logger.info(f"\n✅ Scraping completo: {len(all_records)} registros en {len(scrapers) - len(failed_retailers)}/{len(scrapers)} cadenas")
@@ -150,20 +172,26 @@ async def main():
             )
 
     # ── Generar dashboard HTML ─────────────────────────────────────────────
-    history = db.get_price_history(days=30)
-    dashboard_gen = DashboardGenerator(all_records, alerts, history, failed_retailers)
-    dashboard_path = dashboard_gen.generate()
+    try:
+        history = db.get_price_history(days=30)
+        dashboard_gen = DashboardGenerator(all_records, alerts, history, failed_retailers)
+        dashboard_path = dashboard_gen.generate()
+    except Exception as e:
+        logger.error(f"[dashboard] Error generando HTML: {e}")
+        # Crear un placeholder mínimo para que GitHub Pages tenga algo
+        Path("docs").mkdir(exist_ok=True)
+        Path("docs/index.html").write_text(
+            f"<html><body><h1>Dashboard temporalmente no disponible</h1>"
+            f"<p>Error: {e}</p><p>Revisalo en el próximo ciclo.</p></body></html>"
+        )
+        dashboard_path = "docs/index.html"
 
     # ── Notificaciones ──────────────────────────────────────────────────────
-    # Alertas de alta prioridad (inmediatas)
-    notifier.notify_daily_alerts(alerts, DASHBOARD_URL)
-
-    # Resumen diario (siempre)
-    notifier.notify_daily_summary(saved, alerts, failed_retailers, DASHBOARD_URL)
-
-    # Si TODOS fallaron — urgente
-    if len(failed_retailers) == len(scrapers):
-        notifier.notify_critical_scrape_failure(failed_retailers)
+    if notifier:
+        notifier.notify_daily_alerts(alerts, DASHBOARD_URL)
+        notifier.notify_daily_summary(saved, alerts, failed_retailers, DASHBOARD_URL)
+        if len(failed_retailers) == len(scrapers):
+            notifier.notify_critical_scrape_failure(failed_retailers)
 
     # ── Resumen en log ──────────────────────────────────────────────────────
     elapsed = (datetime.now() - start_time).total_seconds()
